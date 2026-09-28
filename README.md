@@ -9,6 +9,12 @@ Each comment is paired with the code it describes and scored by
 The model only scores; fixed local thresholds decide what is reported and what
 is deleted.
 
+> **OpenJEV support:** Jev is built by [TypeSafe](https://typesafe.ai). This
+> fork keeps TypeSafe as the default and adds optional support for
+> [OpenJEV](https://openjev.sh), a free community gateway to the same Jev
+> model — set `OPENJEV_API_KEY` (or `JEV_PROVIDER=openjev`) to use it. Original
+> project: https://github.com/SergeAx/scrutus by @SergeAx.
+
 > **Status: v0.1, pre-release.** Go, PHP, JavaScript, TypeScript and Python
 > sources are supported; see the
 > [implementation status](docs/design_spec.0.1.md#124-implementation-status).
@@ -42,7 +48,9 @@ carries.
 ## Quickstart
 
 Set `TYPESAFE_API_KEY` in your environment, or put it in a `.env` file in the
-working directory or next to the executable. Then preview what scrutus would
+working directory or next to the executable. To use
+[OpenJEV](https://openjev.sh) instead, set `OPENJEV_API_KEY` (or
+`JEV_PROVIDER=openjev`). Then preview what scrutus would
 delete, without writing anything:
 
 ```sh
@@ -109,6 +117,8 @@ ignore = ["vendor/**", "**/*_test.go"]
 
 [jev]
 model = "jev-latest"             # pin a version in CI for stable verdicts
+# provider = "openjev"           # use OpenJEV instead of TypeSafe
+# base_url = "https://api.openjev.sh"  # override the endpoint
 ```
 
 List only the languages you want scored. When a file in scope belongs to a

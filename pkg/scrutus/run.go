@@ -33,6 +33,53 @@ import (
 
 const Version = "0.1.0"
 
+// Provider identifiers for the Jev backend.
+const (
+	ProviderTypeSafe = "typesafe"
+	ProviderOpenJEV  = "openjev"
+)
+
+// OpenJEV endpoint, model, and key environment variable.
+const (
+	OpenJEVBaseURL   = "https://api.openjev.sh"
+	OpenJEVModel     = "openjev"
+	OpenJEVAPIKeyEnv = "OPENJEV_API_KEY"
+	JEVProviderEnv   = "JEV_PROVIDER"
+)
+
+// ResolveProvider determines which Jev provider to use. An explicit
+// jev.provider in config or a JEV_PROVIDER environment variable wins;
+// otherwise TypeSafe is used when its key is set (the unchanged default);
+// otherwise OpenJEV when only OPENJEV_API_KEY is set. When neither key is
+// set the default is TypeSafe, so anyone with a TypeSafe key sees no change.
+func ResolveProvider(cfg config.Config) string {
+	if cfg.Jev.Provider != "" {
+		return cfg.Jev.Provider
+	}
+	if p := os.Getenv(JEVProviderEnv); p != "" {
+		return p
+	}
+	if os.Getenv(typesafe.APIKeyEnv) != "" {
+		return ProviderTypeSafe
+	}
+	if os.Getenv(OpenJEVAPIKeyEnv) != "" {
+		return ProviderOpenJEV
+	}
+	return ProviderTypeSafe
+}
+
+// APIKeyEnv returns the environment variable name for the API key, honoring
+// an explicit jev.api_key_env, then the selected provider's default.
+func APIKeyEnv(cfg config.Config) string {
+	if cfg.Jev.APIKeyEnv != "" {
+		return cfg.Jev.APIKeyEnv
+	}
+	if ResolveProvider(cfg) == ProviderOpenJEV {
+		return OpenJEVAPIKeyEnv
+	}
+	return typesafe.APIKeyEnv
+}
+
 type Mode string
 
 const (
@@ -119,6 +166,14 @@ func Run(ctx context.Context, opts Options) (Report, error) {
 		return Report{}, err
 	}
 	applyOverrides(&resolved, opts)
+
+	// When OpenJEV is the provider and the model is still the default
+	// jev-latest, switch to the OpenJEV model id. An explicitly pinned
+	// model is respected. This affects finding IDs, cache keys, and the
+	// client's default model, so it must happen before collect().
+	if ResolveProvider(resolved.Config) == ProviderOpenJEV && resolved.Jev.Model == "jev-latest" {
+		resolved.Jev.Model = OpenJEVModel
+	}
 
 	rubric, err := assess.LoadRubric(resolved.Rubric)
 	if err != nil {
@@ -392,7 +447,7 @@ type cacheStore interface {
 }
 
 func openCache(cfg config.Resolved, opts Options) (cacheStore, string, error) {
-	apiKey := os.Getenv(apiKeyEnv(cfg))
+	apiKey := os.Getenv(APIKeyEnv(cfg.Config))
 	if opts.NoCache {
 		return cache.Noop{}, apiKey, nil
 	}
@@ -404,17 +459,10 @@ func openCache(cfg config.Resolved, opts Options) (cacheStore, string, error) {
 	return store, apiKey, nil
 }
 
-func apiKeyEnv(cfg config.Resolved) string {
-	if cfg.Jev.APIKeyEnv != "" {
-		return cfg.Jev.APIKeyEnv
-	}
-	return typesafe.APIKeyEnv
-}
-
 func newAssessor(cfg config.Resolved, rubric assess.Rubric, apiKey string, opts Options) (assess.Assessor, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("%w: set %s, or put it in one of %s",
-			ErrNoAPIKey, apiKeyEnv(cfg), strings.Join(config.DotenvPaths(), ", "))
+			ErrNoAPIKey, APIKeyEnv(cfg.Config), strings.Join(config.DotenvPaths(), ", "))
 	}
 
 	clientOptions := []typesafe.ClientOption{
@@ -422,6 +470,20 @@ func newAssessor(cfg config.Resolved, rubric assess.Rubric, apiKey string, opts 
 		typesafe.WithDefaultModel(cfg.Jev.Model),
 		typesafe.WithTimeout(time.Duration(cfg.Jev.Timeout)),
 	}
+
+	// OpenJEV: point the SDK at the OpenJEV gateway. An explicit
+	// jev.base_url overrides the default endpoint for either provider.
+	provider := ResolveProvider(cfg.Config)
+	if provider == ProviderOpenJEV {
+		baseURL := OpenJEVBaseURL
+		if cfg.Jev.BaseURL != "" {
+			baseURL = cfg.Jev.BaseURL
+		}
+		clientOptions = append(clientOptions, typesafe.WithBaseURL(baseURL))
+	} else if cfg.Jev.BaseURL != "" {
+		clientOptions = append(clientOptions, typesafe.WithBaseURL(cfg.Jev.BaseURL))
+	}
+
 	if opts.Logger != nil {
 		clientOptions = append(clientOptions, typesafe.WithLogger(opts.Logger))
 	}

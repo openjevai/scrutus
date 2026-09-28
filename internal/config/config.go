@@ -36,6 +36,8 @@ type Config struct {
 type Jev struct {
 	Model      string   `toml:"model"`
 	APIKeyEnv  string   `toml:"api_key_env"`
+	Provider   string   `toml:"provider"`
+	BaseURL    string   `toml:"base_url"`
 	RawTimeout string   `toml:"timeout"`
 	Timeout    Duration `toml:"-"`
 }
@@ -255,6 +257,12 @@ func merge(dst *Config, src Config) {
 	}
 	if src.Jev.APIKeyEnv != "" {
 		dst.Jev.APIKeyEnv = src.Jev.APIKeyEnv
+	}
+	if src.Jev.Provider != "" {
+		dst.Jev.Provider = src.Jev.Provider
+	}
+	if src.Jev.BaseURL != "" {
+		dst.Jev.BaseURL = src.Jev.BaseURL
 	}
 	if src.Jev.RawTimeout != "" {
 		dst.Jev.RawTimeout = src.Jev.RawTimeout

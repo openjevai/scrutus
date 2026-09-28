@@ -183,11 +183,7 @@ func cacheCmd(opts *scrutus.Options) *cobra.Command {
 		if !opts.NoDotenv {
 			config.LoadDotenv()
 		}
-		env := typesafe.APIKeyEnv
-		if cfg.Jev.APIKeyEnv != "" {
-			env = cfg.Jev.APIKeyEnv
-		}
-		return cache.Open(cfg.Cache.Dir, os.Getenv(env), time.Duration(cfg.Cache.TTL))
+		return cache.Open(cfg.Cache.Dir, os.Getenv(scrutus.APIKeyEnv(cfg)), time.Duration(cfg.Cache.TTL))
 	}
 
 	cmd.AddCommand(&cobra.Command{
